@@ -1,7 +1,7 @@
 mod genai;
+mod write_to_file;
 use dotenv::dotenv;
 use genai::Genai;
-use reqwest::Error;
 use std::env;
 use std::io;
 use std::io::Write;
