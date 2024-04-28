@@ -1,5 +1,5 @@
+mod file_io;
 mod genai;
-mod write_to_file;
 use dotenv::dotenv;
 use genai::Genai;
 use std::env;

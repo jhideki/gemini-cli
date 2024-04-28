@@ -1,7 +1,6 @@
 use phf::phf_map;
-use tokio::fs::File;
-use tokio::io;
-use tokio::io::{AsyncWriteExt, Result};
+use tokio::fs::OpenOptions;
+use tokio::io::{AsyncWrite, AsyncWriteExt, Result};
 use tokio::sync::mpsc;
 
 static EXTENSIONS: phf::Map<&'static str, &'static str> = phf_map! (
@@ -22,21 +21,24 @@ static EXTENSIONS: phf::Map<&'static str, &'static str> = phf_map! (
     "kotlin" => "kt",
 );
 
+#[derive(Clone)]
 pub struct FileWriteMessage {
-    file: File,
-    text: String,
+    pub file_name: Option<String>,
+    pub text: String,
 }
 
 pub async fn write(mut receiver: mpsc::Receiver<FileWriteMessage>) -> Result<()> {
     while let Some(message) = receiver.recv().await {
-        message.file.write_all(message.text.as_bytes()).await?;
+        if let Some(file_name) = message.file_name {
+            if let Some(extension) = EXTENSIONS.get(&file_name) {
+                let mut file = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(format!("response.{}", extension))
+                    .await?;
+                file.write_all(message.text.as_bytes()).await?;
+            }
+        }
     }
     Ok(())
-}
-
-pub fn create(file_type: String) -> Result<File, io::Error> {
-    if let Some(extension) = EXTENSIONS.get(&file_type) {
-        return Ok(File::create(format!("response.{}", extension)));
-    }
-    Ok(File::create("response.md"))
 }

@@ -1,8 +1,9 @@
-use crate::write_to_file::{self, FileWriteMessage};
+use crate::file_io::{create, write, FileWriteMessage};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::{fs::File, sync::mpsc};
+use tokio::fs::File;
+use tokio::sync::mpsc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Content {
@@ -127,10 +128,13 @@ impl Genai {
     async fn parse_stream(mut stream: Response) -> Result<Vec<Part>, Box<dyn std::error::Error>> {
         let mut response_parts: Vec<Part> = Vec::new();
         let (sender, receiver) = mpsc::channel(32);
-        let mut is_code_flag = false;
+        let mut message = FileWriteMessage {
+            file_name: None,
+            text: String::from(""),
+        };
 
         tokio::spawn(async move {
-            if let Err(e) = write_to_file::write(receiver) {
+            if let Err(e) = write(receiver).await {
                 println!("Error writing to file {}", e);
             }
         });
@@ -142,9 +146,11 @@ impl Genai {
                 let json_data = json_string.trim_start_matches("data: ");
                 let data: Data = serde_json::from_str(json_data)?;
                 if let Some(content) = &data.candidates[0].content {
-                    let text = content.parts[0].text;
+                    let text = &content.parts[0].text;
                     response_parts.push(content.parts[0].clone());
-                    if is_code_flag && Self::check_for_code(&text) {}
+                    message.file_name = Self::check_for_code(&text);
+                    message.text = text.clone();
+                    sender.send(message.clone());
                     println!("{}", text);
                 }
             } else {
@@ -152,18 +158,17 @@ impl Genai {
         }
         Ok(response_parts)
     }
-    fn check_for_code(line: &String) -> bool {
-        let mut count = 0;
+    fn check_for_code(line: &String) -> Option<String> {
         let mut file_type = String::new();
-        if let Some(index) = line.find("```"){
-            while let Some(c) = line[index..].chars.next(){
-                if c == '\'{
-                    break;
-                }else{
+        if let Some(index) = line.find("```") {
+            while let Some(c) = line[index..].chars().next() {
+                if c == '\\' {
+                    return Some(file_type);
+                } else {
                     file_type.push(c);
                 }
             }
         }
-        false
+        None
     }
 }
