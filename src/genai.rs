@@ -1,9 +1,8 @@
-use crate::file_io::{create, write, FileWriteMessage};
+use crate::file_io::{FileIOMessage, Message};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::fs::File;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Content {
@@ -48,15 +47,17 @@ pub struct Genai {
     end_point: String,
     message_thread: Vec<Content>,
     client: Client,
+    sender: Sender<FileIOMessage>,
 }
 impl Genai {
-    pub fn new(api_key: String, model_name: &str) -> Self {
+    pub fn new(api_key: String, model_name: &str, sender: Sender<FileIOMessage>) -> Self {
         Genai {
             api_key,
             model_name: model_name.to_string(),
             end_point: "https://generativelanguage.googleapis.com/v1beta/models/".to_string(),
             message_thread: Vec::new(),
             client: Client::new(),
+            sender,
         }
     }
 
@@ -115,7 +116,7 @@ impl Genai {
             .send()
             .await?;
 
-        if let Ok(response_parts) = Self::parse_stream(res).await {
+        if let Ok(response_parts) = self.parse_stream(res).await {
             self.message_thread.push(Content {
                 role: "model".to_string(),
                 parts: response_parts,
@@ -125,50 +126,32 @@ impl Genai {
         Ok(())
     }
 
-    async fn parse_stream(mut stream: Response) -> Result<Vec<Part>, Box<dyn std::error::Error>> {
+    async fn parse_stream(
+        &self,
+        mut stream: Response,
+    ) -> Result<Vec<Part>, Box<dyn std::error::Error>> {
         let mut response_parts: Vec<Part> = Vec::new();
-        let (sender, receiver) = mpsc::channel(32);
-        let mut message = FileWriteMessage {
-            file_name: None,
-            text: String::from(""),
-        };
-
-        tokio::spawn(async move {
-            if let Err(e) = write(receiver).await {
-                println!("Error writing to file {}", e);
-            }
-        });
 
         while let Some(chunk) = stream.chunk().await? {
             let json_string = std::str::from_utf8(&chunk)?;
-            println!("{}", json_string);
             if json_string.starts_with("data: ") {
                 let json_data = json_string.trim_start_matches("data: ");
                 let data: Data = serde_json::from_str(json_data)?;
                 if let Some(content) = &data.candidates[0].content {
                     let text = &content.parts[0].text;
                     response_parts.push(content.parts[0].clone());
-                    message.file_name = Self::check_for_code(&text);
-                    message.text = text.clone();
-                    sender.send(message.clone());
+                    let _ = self
+                        .sender
+                        .send(FileIOMessage {
+                            text: text.clone(),
+                            message: Message::Write,
+                        })
+                        .await;
                     println!("{}", text);
                 }
             } else {
             }
         }
         Ok(response_parts)
-    }
-    fn check_for_code(line: &String) -> Option<String> {
-        let mut file_type = String::new();
-        if let Some(index) = line.find("```") {
-            while let Some(c) = line[index..].chars().next() {
-                if c == '\\' {
-                    return Some(file_type);
-                } else {
-                    file_type.push(c);
-                }
-            }
-        }
-        None
     }
 }
