@@ -93,6 +93,12 @@ impl Genai {
         &mut self,
         prompt: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let file_name = prompt
+            .clone()
+            .chars()
+            .filter(|&c| !c.is_whitespace())
+            .take(20)
+            .collect();
         let part = Part { text: prompt };
         self.message_thread.push(Content {
             role: "user".to_string(),
@@ -116,7 +122,7 @@ impl Genai {
             .send()
             .await?;
 
-        if let Ok(response_parts) = self.parse_stream(res).await {
+        if let Ok(response_parts) = self.parse_stream(res, file_name).await {
             self.message_thread.push(Content {
                 role: "model".to_string(),
                 parts: response_parts,
@@ -129,6 +135,7 @@ impl Genai {
     async fn parse_stream(
         &self,
         mut stream: Response,
+        file_name: String,
     ) -> Result<Vec<Part>, Box<dyn std::error::Error>> {
         let mut response_parts: Vec<Part> = Vec::new();
 
@@ -145,6 +152,7 @@ impl Genai {
                         .send(FileIOMessage {
                             text: text.clone(),
                             message: Message::Write,
+                            file_name: file_name.clone(),
                         })
                         .await;
                     println!("{}", text);
