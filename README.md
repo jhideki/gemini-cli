@@ -17,7 +17,7 @@ A simple command line wrapper for the google gemini ai model.
 1. Install rust
 2. Clone this repo
 
-````bash
+```bash
 git clone https://github.com/jhideki/gemini-cli.git
 ```
 
@@ -52,5 +52,3 @@ Explain what this file does <main.rs>
 
 If the response includes a code snippet, gemini-cli will the write the code to a file within the './responses' directory with the relevant extension.
 
-
-````
