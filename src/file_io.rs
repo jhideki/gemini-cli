@@ -117,12 +117,15 @@ impl FileIO {
                 self.is_writing = false;
             } else {
                 let remaining_line = &line[index + 3..];
+                self.file_path.push(self.file_name.clone());
                 if let Some(extension) = EXTENSIONS.get(&remaining_line) {
-                    self.file_path.push(self.file_name.clone());
                     self.file_path.set_extension(extension);
-                    self.files.push(self.file_path.clone());
-                    self.is_writing = true;
+                } else {
+                    self.file_path.set_extension("md");
                 }
+
+                self.files.push(self.file_path.clone());
+                self.is_writing = true;
             }
             return true;
         }

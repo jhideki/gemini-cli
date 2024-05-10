@@ -62,30 +62,41 @@ impl Genai {
     }
 
     pub async fn single_query(&self, prompt: String) -> Result<(), Box<dyn std::error::Error>> {
+        let file_name = prompt
+            .clone()
+            .chars()
+            .filter(|&c| !c.is_whitespace())
+            .take(20)
+            .collect();
+
         let part: Part = Part { text: prompt };
+
         let content: Content = Content {
             role: "user".to_string(),
             parts: vec![part],
         };
+
         let request_body = RequestBody {
             contents: vec![content],
         };
+
         let url = format!(
             "{}{}:generateContent?key={}",
             self.end_point, self.model_name, self.api_key
         );
-        println!("{}", url);
-        println!("{}", serde_json::to_string(&request_body).unwrap());
-        let client = Client::new();
-        let response = client
+
+        let res = self
+            .client
             .post(&url)
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()
             .await?;
 
-        let json_response: Value = response.json().await?;
-        println!("{}", json_response.to_string());
+        if let Err(e) = self.parse_stream(res, file_name).await {
+            println!("Error parsing stream: {}", e);
+        }
+
         Ok(())
     }
 
