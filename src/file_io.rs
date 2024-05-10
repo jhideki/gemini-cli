@@ -1,5 +1,7 @@
 use phf::phf_map;
+use std::env;
 use std::fs;
+use std::path::PathBuf;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncWriteExt, Result};
 use tokio::sync::mpsc;
@@ -8,6 +10,8 @@ static EXTENSIONS: phf::Map<&'static str, &'static str> = phf_map! (
     "python" => "py",
     "javascript" => "js",
     "java" => "java",
+    "jsx" => "jsx",
+    "tsx" => "tsx",
     "c" => "c",
     "c++" => "cpp",
     "c#" => "cs",
@@ -35,18 +39,29 @@ pub struct FileIOMessage {
 
 pub struct FileIO {
     is_writing: bool,
-    file_path: String,
+    file_path: PathBuf,
+    files: Vec<PathBuf>,
     file_name: String,
-    files: Vec<String>,
 }
 
 impl FileIO {
     pub fn new() -> Self {
+        let mut path = match env::current_dir() {
+            Ok(path) => path,
+            Err(e) => {
+                println!("Error getting file path: {}", e);
+                std::process::exit(0);
+            }
+        };
+        if !fs::metadata("responses/").is_ok() {
+            fs::create_dir("responses").expect("Error creating responses dir");
+        }
+        path.push("responses/");
         FileIO {
             is_writing: false,
-            file_path: String::from(""),
-            file_name: String::from(""),
+            file_path: path,
             files: Vec::new(),
+            file_name: String::new(),
         }
     }
 
@@ -97,13 +112,15 @@ impl FileIO {
     fn check_for_code(&mut self, line: &str) -> bool {
         if let Some(index) = line.find("```") {
             if self.is_writing {
+                //reset file path
+                self.file_path.pop();
                 self.is_writing = false;
             } else {
                 let remaining_line = &line[index + 3..];
                 if let Some(extension) = EXTENSIONS.get(&remaining_line) {
-                    let file_path = String::from(format!("{}.{}", self.file_name, extension));
-                    self.file_path = file_path.clone();
-                    self.files.push(file_path.clone());
+                    self.file_path.push(self.file_name.clone());
+                    self.file_path.set_extension(extension);
+                    self.files.push(self.file_path.clone());
                     self.is_writing = true;
                 }
             }
@@ -115,10 +132,11 @@ impl FileIO {
     pub fn remove(&mut self) {
         while let Some(file) = self.files.pop() {
             match fs::remove_file(&file) {
-                Ok(_) => println!("File: {} has been deleted", self.file_path),
+                Ok(_) => println!("File: {} has been deleted", file.to_string_lossy()),
                 Err(e) => eprintln!("Error deleting file: {}", e),
             }
         }
+        fs::remove_dir("responses").expect("error deleting dir");
     }
 }
 

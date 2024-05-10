@@ -1,20 +1,26 @@
 mod file_io;
 mod genai;
-use dotenv::dotenv;
 use file_io::FileIO;
 use file_io::{read, FileIOMessage, Message};
 use genai::Genai;
-use std::env;
 use std::io;
 use std::io::Write;
+use std::{env, process};
 use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const EXIT: &str = "exit";
+    const YES: &str = "yY";
 
-    dotenv().ok();
-    let api_key = env::var("GEMINI_API_KEY").expect("error loading env");
+    let api_key = match env::var("GEMINI_API_KEY") {
+        Ok(val) => val,
+        Err(e) => {
+            println!("Failed to load env variable {}", e);
+            process::exit(0);
+        }
+    };
+
     let (sender, receiver) = mpsc::channel(32);
     let mut client = Genai::new(api_key, "gemini-pro", sender.clone());
 
@@ -33,13 +39,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = io::stdin().read_line(&mut input);
         let trimmed = input.trim();
         if trimmed == EXIT {
-            sender
-                .send(FileIOMessage {
-                    text: String::new(),
-                    message: Message::Remove,
-                    file_name: "".to_string(),
-                })
-                .await?;
+            print!("Would you like to delete the './responses' directory? (y/n): ");
+            io::stdout().flush().unwrap();
+            let _ = io::stdin().read_line(&mut input);
+            let trimmed = input.trim();
+            if YES.contains(trimmed) {
+                sender
+                    .send(FileIOMessage {
+                        text: String::new(),
+                        message: Message::Remove,
+                        file_name: String::new(),
+                    })
+                    .await?;
+            }
+            println!("The 'repsonses' directory has been deleted. Exiting the program...");
             break;
         }
 
