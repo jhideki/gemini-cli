@@ -2,7 +2,7 @@ mod errors;
 mod file_io;
 mod genai;
 
-use errors::InvalidArgument;
+use errors::{EnvVarError, InvalidArgument};
 use file_io::FileIO;
 use file_io::{read, FileIOMessage, Message};
 use genai::Genai;
@@ -33,10 +33,21 @@ fn display_help() {
     println!("'-l': List gemini models.");
 }
 
-async fn run_commands(args: Vec<Arguments>, client: Genai) {
+async fn run_commands(
+    args: Vec<Arguments>,
+    client: Genai,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut prompt: Option<String> = None;
     for arg in args {
         match arg.cmd.as_str() {
+            "-v" => println!("Version 0.1.0. Drop a star and follow me on github pls. https://github.com/jhideki"),
+            "-a" => {
+                if let Some(value) = arg.value {
+                    env::set_var("GEMINI_API_KEY", value);
+                } else {
+                    return Err(Box::new(InvalidArgument {}));
+                }
+            }
             "-p" => {
                 if let Some(value) = arg.value {
                     prompt = Some(value);
@@ -59,15 +70,14 @@ async fn run_commands(args: Vec<Arguments>, client: Genai) {
                 }
             }
             _ => {
-                println!(
-                    "Invalid argument. \n Use '-h' to display help information about the program."
-                )
+                return Err(Box::new(InvalidArgument {}));
             }
         }
     }
     if let Some(prompt) = prompt {
         let _ = client.single_query(prompt).await;
     }
+    Ok(())
 }
 
 struct Arguments {
@@ -111,6 +121,7 @@ fn process_arguments(args: Vec<String>) -> Result<Vec<Arguments>, Box<dyn std::e
     arg_commands.sort_by_key(|k| k.order);
     Ok(arg_commands)
 }
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     const EXIT: &str = "exit";
@@ -138,7 +149,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
         if let Ok(arguments) = process_arguments(args) {
-            run_commands(arguments, client).await;
+            if let Err(e) = run_commands(arguments, client).await {
+                println!("Error: {}", e);
+            }
         }
         std::process::exit(0);
     }
