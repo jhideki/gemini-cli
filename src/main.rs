@@ -35,7 +35,7 @@ fn display_help() {
 
 async fn run_commands(
     args: Vec<Arguments>,
-    client: Genai,
+    mut client: Genai,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut prompt: Option<String> = None;
     for arg in args {
@@ -75,11 +75,13 @@ async fn run_commands(
         }
     }
     if let Some(prompt) = prompt {
-        let _ = client.single_query(prompt).await;
+        println!("Sending prompt...");
+        let _ = client.message_thread(prompt).await;
     }
     Ok(())
 }
 
+#[derive(Debug)]
 struct Arguments {
     cmd: String,
     value: Option<String>,
@@ -88,33 +90,18 @@ struct Arguments {
 
 fn process_arguments(args: Vec<String>) -> Result<Vec<Arguments>, Box<dyn std::error::Error>> {
     let mut arg_commands: Vec<Arguments> = Vec::new();
-    for mut i in 1..args.len() {
-        match args[i].chars().nth(0).unwrap() {
-            '-' => {
-                if let Some(order) = ARGS.get(&args[i][1..]) {
-                    arg_commands.push(Arguments {
-                        cmd: args[i].clone(),
-                        value: None,
-                        order: *order,
-                    })
+    for i in 1..args.len() {
+        if args[i].chars().nth(0).unwrap() == '-' {
+            let mut value: Option<String> = None;
+            if let Some(order) = ARGS.get(&args[i]) {
+                if i + 1 < args.len() && args[i + 1].chars().nth(0).unwrap() != '-' {
+                    value = Some(args[i + 1].clone());
                 }
-            }
-            '"' => {
-                let mut prompt = String::new();
-                while i < args.len() && !args[i].ends_with("\"") {
-                    prompt.push_str(&args[i].clone());
-                    prompt.push(' ');
-                    i += 1;
-                }
-                if let Some(mut arg) = arg_commands.pop() {
-                    arg.value = Some(prompt);
-                    arg_commands.push(arg);
-                } else {
-                    return Err(Box::new(InvalidArgument {}));
-                }
-            }
-            _ => {
-                return Err(Box::new(InvalidArgument {}));
+                arg_commands.push(Arguments {
+                    cmd: args[i].clone(),
+                    value,
+                    order: *order,
+                })
             }
         }
     }
@@ -148,10 +135,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //CLI arguments
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
-        if let Ok(arguments) = process_arguments(args) {
-            if let Err(e) = run_commands(arguments, client).await {
-                println!("Error: {}", e);
+        match process_arguments(args) {
+            Ok(arguments) => {
+                if let Err(e) = run_commands(arguments, client).await {
+                    println!("Error: {}", e);
+                }
             }
+            Err(e) => println!("Error: {}", e),
         }
         std::process::exit(0);
     }

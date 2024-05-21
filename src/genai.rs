@@ -1,7 +1,6 @@
 use crate::file_io::{FileIOMessage, Message};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -81,7 +80,7 @@ impl Genai {
         };
 
         let url = format!(
-            "{}{}:generateContent?key={}",
+            "{}{}:streamGenerateContent?key={}",
             self.end_point, self.model_name, self.api_key
         );
 
