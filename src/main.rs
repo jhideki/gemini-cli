@@ -24,13 +24,13 @@ static ARGS: phf::Map<&'static str, usize> = phf_map! (
 );
 
 fn display_help() {
-    println!("'-h': Display help information about the program");
-    println!("'-v': Display version information");
-    println!("'-f': Pass a file to Gemini");
-    println!("'-p': Prompt to send to Gemini");
-    println!("'-a': Set api key \n E.g., gemini-cli -a <YOUR API KEY>. This will set a global environment variable");
-    println!("'-m': Set gemini model.");
-    println!("'-l': List gemini models.");
+    println!("-h: Display help information about the program");
+    println!("-v: Display version information");
+    println!("-f: Pass a file to Gemini");
+    println!("-p: Prompt to send to Gemini");
+    println!("-a: Set api key \n E.g., gemini-cli -a <YOUR API KEY>. This will set a global environment variable");
+    println!("-m: Set gemini model.");
+    println!("-l: List gemini models.");
 }
 
 async fn run_commands(
