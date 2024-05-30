@@ -69,6 +69,9 @@ async fn run_commands(
                     }
                 }
             }
+            "-l" => {
+                let _ = client.list_models().await;
+            }
             _ => {
                 return Err(Box::new(InvalidArgument {}));
             }
